@@ -22,6 +22,7 @@ mod cache;
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
+    dotenv::dotenv().ok();
 
     let listen_url = format!("0.0.0.0:{}", env::var("PORT").unwrap_or("3000".to_string()));
 
