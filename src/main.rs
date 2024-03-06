@@ -9,6 +9,7 @@ extern crate openssl;
 // extern crate diesel;
 
 use std::env;
+use std::net::SocketAddr;
 
 mod domain;
 mod handlers;
@@ -16,6 +17,7 @@ mod routing;
 mod tools;
 mod database;
 mod schema;
+mod cache;
 
 #[tokio::main]
 async fn main() {
@@ -27,5 +29,5 @@ async fn main() {
 
     let routes = routing::get_routes();
     let listener = tokio::net::TcpListener::bind(listen_url).await.unwrap();
-    axum::serve(listener, routes).await.unwrap();
+    axum::serve(listener, routes.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
 }
