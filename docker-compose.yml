@@ -1,0 +1,36 @@
+version: "3"
+
+services:
+  ###
+  ### PostgreSQL
+  ###
+  postgres:
+    image: postgres:14
+    environment:
+      - POSTGRES_DB=tiny
+      - POSTGRES_USER=tiny
+      - POSTGRES_PASSWORD=sT6aA2wJ7iK9yG3j
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - tiny
+
+  ###
+  ### Redis
+  ###
+  redis:
+    build: docker/redis
+    volumes:
+      - ./redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - tiny
+
+networks:
+  tiny:
+
+volumes:
+  db-data:
