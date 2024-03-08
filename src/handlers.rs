@@ -8,7 +8,7 @@ use axum::{
     Json,
 };
 use diesel::prelude::*;
-use axum::extract::{ConnectInfo, Path};
+use axum::extract::{ConnectInfo, Path, State};
 use diesel::RunQueryDsl;
 use rand::distributions::{Alphanumeric, DistString};
 use crate::{
@@ -18,6 +18,7 @@ use crate::{
 use crate::cache::domain::CacheHandler;
 use crate::database::{db_create_tiny_url, db_get_tiny_url, establish_connection};
 use crate::domain::DataInsert;
+use crate::rate_limit::RateLimiter;
 use crate::schema::data_tiny::dsl::data_tiny;
 use crate::schema::data_tiny::short_url;
 
@@ -26,8 +27,18 @@ pub async fn root() -> &'static str {
 }
 
 pub async fn get_tiny_url(
-    url_path: Path<String>
+    State(rate_limiter): State<RateLimiter>,
+    url_path: Path<String>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> (StatusCode, String) {
+
+    match rate_limiter.check_if_rate_limited(addr.ip()) {
+        Ok(_) => {}
+        Err(e) => {
+            return (StatusCode::TOO_MANY_REQUESTS, e);
+        }
+    }
+
     let parsed = url_path.to_string();
 
     if parsed.is_empty() {
@@ -56,10 +67,20 @@ pub async fn get_tiny_url(
 }
 
 pub async fn create_tiny_url(
+    State(rate_limiter): State<RateLimiter>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(payload): Json<CreateTinyUrl>,
-) -> (StatusCode, Json<Data>) {
+) -> (StatusCode, Result<Json<Data>, Json<String>>) {
     log::info!("Request from: {}", addr);
+
+    match rate_limiter.check_if_rate_limited(addr.ip()) {
+        Ok(_) => {}
+        Err(e) => {
+            return (StatusCode::TOO_MANY_REQUESTS, Err(Json(e.to_string())));
+        }
+    }
+
+
     let tiny_url_gen: String = Alphanumeric.sample_string(&mut rand::thread_rng(), 10);
 
     let to_insert = DataInsert {
@@ -70,7 +91,7 @@ pub async fn create_tiny_url(
     };
 
     match db_create_tiny_url(to_insert) {
-        Ok(data) => (StatusCode::CREATED, Json(data)),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(Data::default()))
+        Ok(data) => (StatusCode::CREATED, Ok(Json(data))),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Err(Json(e.to_string()))),
     }
 }
